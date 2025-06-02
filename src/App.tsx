@@ -182,7 +182,13 @@ function App() {
   return (
     <main style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <header style={{ marginBottom: '30px', textAlign: 'center' }}>
+        <h1 style={{ color: '#2c3e50', marginBottom: '10px' }}>
+          🍎 {user?.signInDetails?.loginId || user?.username}'s Calorie Tracking App
+        </h1>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', alignItems: 'center' }}>
+          <span style={{ color: '#27ae60', fontSize: '14px' }}>
+            ✅ Authenticated as {user?.username}
+          </span>
           <button
             onClick={signOut}
             style={{
