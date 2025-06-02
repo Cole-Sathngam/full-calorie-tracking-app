@@ -1,0 +1,9 @@
+{
+  "name": "calorie-api-dependencies",
+  "version": "1.0.0",
+  "description": "Dependencies for Calorie API Lambda function",
+  "dependencies": {
+    "pg": "^8.11.3",
+    "@aws-sdk/client-secrets-manager": "^3.450.0"
+  }
+} 

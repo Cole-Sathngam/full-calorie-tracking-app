@@ -1,5 +1,5 @@
-import { get, post, put, del } from 'aws-amplify/api';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { getApiConfig } from '../config/api';
 
 export interface ApiError {
   code: string;
@@ -8,11 +8,25 @@ export interface ApiError {
   retryable?: boolean;
 }
 
+export interface Food {
+  id: number;
+  name: string;
+  calories: number;
+}
+
 export class ApiClient {
   private static instance: ApiClient;
-  private readonly apiName = 'food-rest-api';
+  private readonly baseUrl: string;
   private readonly maxRetries = 3;
   private readonly retryDelay = 1000; // 1 second
+
+  constructor() {
+    const config = getApiConfig();
+    this.baseUrl = config.cdkApiUrl;
+    
+    console.log('🔧 API Client initialized with base URL:', this.baseUrl);
+    console.log('🔧 API Type:', config.type);
+  }
 
   static getInstance(): ApiClient {
     if (!ApiClient.instance) {
@@ -55,10 +69,18 @@ export class ApiClient {
     if (error && typeof error === 'object') {
       const err = error as Record<string, unknown>;
       
-      // Handle HTTP errors
-      if (err.response && typeof err.response === 'object') {
-        const response = err.response as Record<string, unknown>;
-        const statusCode = response.status as number;
+      // Handle fetch errors
+      if (err.name === 'TypeError' && err.message?.toString().includes('fetch')) {
+        return {
+          code: 'NETWORK_ERROR',
+          message: 'Network error. Please check your connection and try again.',
+          retryable: true
+        };
+      }
+
+      // Handle HTTP response errors
+      if (typeof err.status === 'number') {
+        const statusCode = err.status as number;
         
         switch (statusCode) {
           case 401:
@@ -99,29 +121,11 @@ export class ApiClient {
           default:
             return {
               code: 'HTTP_ERROR',
-              message: `HTTP ${statusCode}: ${response.statusText || 'Request failed'}`,
+              message: `HTTP ${statusCode}: Request failed`,
               statusCode,
               retryable: statusCode >= 500
             };
         }
-      }
-
-      // Handle network errors
-      if (err.name === 'NetworkError' || err.message?.toString().includes('Network')) {
-        return {
-          code: 'NETWORK_ERROR',
-          message: 'Network error. Please check your connection and try again.',
-          retryable: true
-        };
-      }
-
-      // Handle timeout errors
-      if (err.name === 'TimeoutError' || err.message?.toString().includes('timeout')) {
-        return {
-          code: 'TIMEOUT_ERROR',
-          message: 'Request timed out. Please try again.',
-          retryable: true
-        };
       }
 
       // Handle auth errors
@@ -163,94 +167,100 @@ export class ApiClient {
     }
   }
 
-  async getFoods(): Promise<unknown[]> {
+  private async makeRequest<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const headers = await this.getAuthHeaders();
+    const fullUrl = `${this.baseUrl}${endpoint}`;
+    
+    console.log('🌐 Making request to:', fullUrl);
+    console.log('🔑 Headers:', headers);
+    console.log('📦 Options:', options);
+    
+    const response = await fetch(fullUrl, {
+      ...options,
+      headers: {
+        ...headers,
+        ...options.headers,
+      },
+    });
+
+    console.log('📊 Response status:', response.status);
+    console.log('📊 Response headers:', Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Response error body:', errorText);
+      
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`) as Error & { status: number };
+      error.status = response.status;
+      throw error;
+    }
+
+    const data = await response.json();
+    console.log('✅ Response data:', data);
+    return data;
+  }
+
+  async getFoods(): Promise<Food[]> {
     return this.executeWithRetry(async () => {
       console.log('🚀 Fetching foods from API...');
       
-      const headers = await this.getAuthHeaders();
-      const restOperation = get({
-        apiName: this.apiName,
-        path: '/foods',
-        options: { headers }
-      });
-
-      const { body } = await restOperation.response;
-      const result = await body.json() as Record<string, unknown>;
+      const result = await this.makeRequest<{ success: boolean; data: Food[] }>('/foods');
       
       console.log('✅ Foods fetched successfully:', result);
       
-      // Safely handle the response structure
+      // Handle the response structure
       if (result?.data && Array.isArray(result.data)) {
-        return result.data as unknown[];
+        return result.data;
       } else if (Array.isArray(result)) {
-        return result;
+        return result as Food[];
       } else {
-        // Fallback - convert to array if possible
+        // Fallback - return empty array
         return [];
       }
     }, 'getFoods');
   }
 
-  async searchFood(name: string): Promise<unknown[]> {
+  async searchFood(name: string): Promise<Food[]> {
     return this.executeWithRetry(async () => {
       console.log('🔍 Searching for food:', name);
       
-      const headers = await this.getAuthHeaders();
-      const restOperation = get({
-        apiName: this.apiName,
-        path: `/foods/search?name=${encodeURIComponent(name)}`,
-        options: { headers }
-      });
-
-      const { body } = await restOperation.response;
-      const result = await body.json() as Record<string, unknown>;
+      const result = await this.makeRequest<{ success: boolean; data: Food[] }>(
+        `/foods/search?name=${encodeURIComponent(name)}`
+      );
       
       console.log('✅ Food search completed:', result);
-      return (result?.data as unknown[]) || [];
+      return (result?.data as Food[]) || [];
     }, 'searchFood');
   }
 
-  async createFood(name: string, calories: number): Promise<unknown> {
+  async createFood(name: string, calories: number): Promise<Food> {
     return this.executeWithRetry(async () => {
       console.log('➕ Creating food:', { name, calories });
       
-      const headers = await this.getAuthHeaders();
-      const restOperation = post({
-        apiName: this.apiName,
-        path: '/foods',
-        options: {
-          headers,
-          body: { name, calories }
-        }
+      const result = await this.makeRequest<{ success: boolean; data: Food }>('/foods', {
+        method: 'POST',
+        body: JSON.stringify({ name, calories }),
       });
-
-      const { body } = await restOperation.response;
-      const result = await body.json() as Record<string, unknown>;
       
       console.log('✅ Food created successfully:', result);
-      return result?.data || result;
+      return (result?.data || result) as Food;
     }, 'createFood');
   }
 
-  async updateFood(id: string, name: string, calories: number): Promise<unknown> {
+  async updateFood(id: string, name: string, calories: number): Promise<Food> {
     return this.executeWithRetry(async () => {
       console.log('📝 Updating food:', { id, name, calories });
       
-      const headers = await this.getAuthHeaders();
-      const restOperation = put({
-        apiName: this.apiName,
-        path: `/foods/${id}`,
-        options: {
-          headers,
-          body: { name, calories }
-        }
+      const result = await this.makeRequest<{ success: boolean; data: Food }>(`/foods/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name, calories }),
       });
-
-      const { body } = await restOperation.response;
-      const result = await body.json() as Record<string, unknown>;
       
       console.log('✅ Food updated successfully:', result);
-      return result?.data || result;
+      return (result?.data || result) as Food;
     }, 'updateFood');
   }
 
@@ -258,14 +268,10 @@ export class ApiClient {
     return this.executeWithRetry(async () => {
       console.log('🗑️ Deleting food:', id);
       
-      const headers = await this.getAuthHeaders();
-      const restOperation = del({
-        apiName: this.apiName,
-        path: `/foods/${id}`,
-        options: { headers }
+      await this.makeRequest<void>(`/foods/${id}`, {
+        method: 'DELETE',
       });
-
-      await restOperation.response;
+      
       console.log('✅ Food deleted successfully');
     }, 'deleteFood');
   }

@@ -12,39 +12,39 @@ export class CalorieApiInfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // VPC for RDS and Lambda
-    const vpc = new ec2.Vpc(this, 'CalorieAppVpc', {
-      maxAzs: 3,
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        {
-          cidrMask: 24,
-          name: 'isolated',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      ],
+    // Existing RDS instance details (publicly accessible)
+    const existingRdsEndpoint = 'calorie-db-1.czyq4e4syyy0.us-east-2.rds.amazonaws.com';
+    const existingRdsPort = 5432;
+    const existingDbName = 'postgres';
+    const existingDbUsername = 'postgres';
+
+    // Database credentials secret (manually update with your RDS password)
+    const dbCredentials = new secretsmanager.Secret(this, 'DatabaseCredentials', {
+      description: 'Credentials for the existing calorie-db-1 database',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: existingDbUsername }),
+        generateStringKey: 'password',
+        excludeCharacters: '"@/\\',
+      },
     });
+
+    // IMPORTANT: After deployment, update this secret with your actual RDS password:
+    // aws secretsmanager update-secret --secret-id <secret-arn> --secret-string '{"username":"postgres","password":"your-actual-password"}'
 
     // Security Group for RDS
     const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc,
+      vpc: ec2.Vpc.fromLookup(this, 'ExistingVpc', {
+        vpcId: 'vpc-0034494c10a7de603'
+      }),
       description: 'Security group for RDS PostgreSQL database',
       allowAllOutbound: false,
     });
 
     // Security Group for Lambda
     const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
-      vpc,
+      vpc: ec2.Vpc.fromLookup(this, 'ExistingVpc', {
+        vpcId: 'vpc-0034494c10a7de603'
+      }),
       description: 'Security group for Lambda functions',
       allowAllOutbound: true,
     });
@@ -56,24 +56,16 @@ export class CalorieApiInfrastructureStack extends cdk.Stack {
       'Allow Lambda to connect to PostgreSQL'
     );
 
-    // Database credentials secret
-    const dbCredentials = new secretsmanager.Secret(this, 'DatabaseCredentials', {
-      description: 'Credentials for the calorie tracking database',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'postgres' }),
-        generateStringKey: 'password',
-        excludeCharacters: '"@/\\',
-      },
-    });
-
     // RDS PostgreSQL Database
     const database = new rds.DatabaseInstance(this, 'CalorieDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4,
+        version: rds.PostgresEngineVersion.VER_17_4,
       }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       credentials: rds.Credentials.fromSecret(dbCredentials),
-      vpc,
+      vpc: ec2.Vpc.fromLookup(this, 'ExistingVpc', {
+        vpcId: 'vpc-0034494c10a7de603'
+      }),
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       },
@@ -122,68 +114,25 @@ export class CalorieApiInfrastructureStack extends cdk.Stack {
       generateSecret: false, // Required for web applications
     });
 
+    // Lambda Layer with PostgreSQL dependencies
+    // const dependenciesLayer = new lambda.LayerVersion(this, 'CalorieApiDependencies', {
+    //   code: lambda.Code.fromAsset('lambda-layer'),
+    //   compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
+    //   description: 'PostgreSQL client and AWS SDK dependencies for Calorie API',
+    // });
+
     // Lambda function for API
     const apiFunction = new lambda.Function(this, 'CalorieApiFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-        const { Client } = require('pg');
-        
-        exports.handler = async (event) => {
-          console.log('Event:', JSON.stringify(event, null, 2));
-          
-          const headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-            'Content-Type': 'application/json'
-          };
-
-          if (event.httpMethod === 'OPTIONS') {
-            return {
-              statusCode: 200,
-              headers,
-              body: JSON.stringify({ message: 'CORS preflight successful' })
-            };
-          }
-
-          try {
-            // This is a demonstration function
-            // In the actual implementation, this would connect to PostgreSQL
-            const mockFoods = [
-              { id: 1, name: 'Apple', calories: 95 },
-              { id: 2, name: 'Banana', calories: 105 },
-              { id: 3, name: 'Chicken Breast (100g)', calories: 165 }
-            ];
-
-            return {
-              statusCode: 200,
-              headers,
-              body: JSON.stringify({
-                success: true,
-                data: mockFoods,
-                message: 'Food items retrieved successfully',
-                source: 'cdk-demo'
-              })
-            };
-          } catch (error) {
-            return {
-              statusCode: 500,
-              headers,
-              body: JSON.stringify({
-                success: false,
-                error: 'Internal server error',
-                details: error.message
-              })
-            };
-          }
-        };
-      `),
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
+      // layers: [dependenciesLayer],
+      code: lambda.Code.fromAsset('lambda'), // Use our deployment package
+      // Remove VPC for now since existing RDS is publicly accessible
+      // vpc,
+      // vpcSubnets: {
+      //   subnetType: ec2.SubnetType.PUBLIC,
+      // },
+      // securityGroups: [lambdaSecurityGroup],
       environment: {
         DB_SECRET_ARN: dbCredentials.secretArn,
         DB_ENDPOINT: database.instanceEndpoint.hostname,
@@ -218,8 +167,10 @@ export class CalorieApiInfrastructureStack extends cdk.Stack {
           'X-Amz-Date',
           'Authorization',
           'X-Api-Key',
-          'X-Amz-Security-Token'
+          'X-Amz-Security-Token',
+          'X-Amz-User-Agent'
         ],
+        allowCredentials: false,
       },
     });
 
@@ -262,7 +213,9 @@ export class CalorieApiInfrastructureStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
+      value: ec2.Vpc.fromLookup(this, 'ExistingVpc', {
+        vpcId: 'vpc-0034494c10a7de603'
+      }).vpcId,
       description: 'VPC ID',
     });
   }
