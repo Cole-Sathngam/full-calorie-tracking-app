@@ -1,0 +1,12 @@
+{
+  "name": "api-functions",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.10.9",
+    "@types/aws-lambda": "^8.10.130"
+  }
+} 

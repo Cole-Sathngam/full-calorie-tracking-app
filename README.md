@@ -6,8 +6,8 @@ A comprehensive calorie tracking application built with React.js and AWS service
 
 This project consists of two main components:
 
-1. **React Application** (`calorie-tracking-app/`) - Built with AWS Amplify
-2. **Infrastructure Code** (`calorie-api-infrastructure/`) - Separate AWS CDK project
+1. **React Application** (root directory) - Built with AWS Amplify
+2. **Infrastructure Code** (`infrastructure/`) - Separate AWS CDK project
 
 ### AWS Services Used
 
@@ -43,27 +43,24 @@ This project consists of two main components:
 
 ```
 full-calorie-tracking-app/
-├── calorie-tracking-app/          # React application (AWS Amplify)
-│   ├── src/
-│   │   ├── components/            # React components
-│   │   ├── hooks/                 # Custom React hooks
-│   │   ├── services/              # API client and services
-│   │   └── contexts/              # React context providers
-│   ├── amplify/                   # Amplify backend configuration
-│   │   ├── auth/                  # Cognito authentication setup
-│   │   ├── data/                  # Database schema and configuration
-│   │   └── functions/             # Lambda function code
-│   └── docs/                      # Application documentation
-│
-├── calorie-api-infrastructure/    # Separate CDK infrastructure
+├── src/                           # React application source code
+│   ├── components/                # React components
+│   ├── hooks/                     # Custom React hooks
+│   ├── services/                  # API client and services
+│   └── contexts/                  # React context providers
+├── amplify/                       # Amplify backend configuration
+│   ├── auth/                      # Cognito authentication setup
+│   ├── data/                      # Database schema and configuration
+│   └── functions/                 # Lambda function code
+├── public/                        # Static assets
+├── infrastructure/                # Separate CDK infrastructure codebase
 │   ├── lib/                       # CDK stack definitions
 │   ├── bin/                       # CDK app entry point
 │   └── README.md                  # Infrastructure documentation
-│
 ├── docs/                          # Project documentation
 │   ├── architecture-diagram.md    # System architecture
 │   └── code-snippets.md          # Key implementation examples
-│
+├── package.json                   # React app dependencies
 └── README.md                      # This file
 ```
 
@@ -79,13 +76,12 @@ full-calorie-tracking-app/
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/full-calorie-tracking-app.git
+   git clone https://github.com/Cole-Sathngam/full-calorie-tracking-app.git
    cd full-calorie-tracking-app
    ```
 
-2. **Set up the React application:**
+2. **Install dependencies:**
    ```bash
-   cd calorie-tracking-app
    npm install
    ```
 
@@ -107,7 +103,7 @@ full-calorie-tracking-app/
 The separate CDK infrastructure is provided for demonstration purposes:
 
 ```bash
-cd calorie-api-infrastructure
+cd infrastructure
 npm install
 npm run build
 cdk deploy

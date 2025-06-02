@@ -3,23 +3,21 @@ backend:
   phases:
     build:
       commands:
-        - pwd
-        - ls -la
-        - ls -la calorie-tracking-app/
-        - cd calorie-tracking-app && pwd && ls -la && npm install && npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+        - npm install
+        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
 frontend:
   phases:
     preBuild:
       commands:
-        - cd calorie-tracking-app && npm install
+        - npm install
     build:
       commands:
-        - cd calorie-tracking-app && npm run build
+        - npm run build
   artifacts:
-    baseDirectory: calorie-tracking-app/dist
+    baseDirectory: dist
     files:
       - '**/*'
   cache:
     paths:
-      - calorie-tracking-app/.npm/**/*
-      - calorie-tracking-app/node_modules/**/* 
+      - .npm/**/*
+      - node_modules/**/* 

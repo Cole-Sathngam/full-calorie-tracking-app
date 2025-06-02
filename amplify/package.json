@@ -1,0 +1,7 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@types/pg": "^8.15.2",
+    "pg": "^8.16.0"
+  }
+}
