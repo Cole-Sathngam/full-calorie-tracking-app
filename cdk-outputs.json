@@ -1,0 +1,12 @@
+{
+  "CalorieApiInfrastructureStackV2": {
+    "UserPoolClientId": "1iuo3spailh216c0rkmt7vuubn",
+    "ApiGatewayUrl": "https://mihh31xr4e.execute-api.us-east-2.amazonaws.com/prod/",
+    "PostDeploymentInstructions": "Update the secret with your RDS password: aws secretsmanager update-secret --secret-id arn:aws:secretsmanager:us-east-2:850960379692:secret:ExistingDbCredentials48D0D2-X6MbPDEu44v4-QR1b9Y --secret-string '{\"username\":\"postgres\",\"password\":\"YOUR_ACTUAL_PASSWORD\"}'",
+    "CalorieApiEndpointEB2559FA": "https://mihh31xr4e.execute-api.us-east-2.amazonaws.com/prod/",
+    "UserPoolId": "us-east-2_zzEaQrL3T",
+    "DatabaseSecretArn": "arn:aws:secretsmanager:us-east-2:850960379692:secret:ExistingDbCredentials48D0D2-X6MbPDEu44v4-QR1b9Y",
+    "TestUserCredentials": "Test users created: test1@example.com, test2@example.com, admin@example.com (all with password: TempPass123!)",
+    "DatabaseEndpoint": "calorie-db-1.czyq4e4syyy0.us-east-2.rds.amazonaws.com"
+  }
+}

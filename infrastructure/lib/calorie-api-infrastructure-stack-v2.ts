@@ -1,4 +1,4 @@
- import * as cdk from 'aws-cdk-lib';
+import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -152,6 +152,12 @@ export class CalorieApiInfrastructureStackV2 extends cdk.Stack {
     new cdk.CfnOutput(this, 'PostDeploymentInstructions', {
       value: `Update the secret with your RDS password: aws secretsmanager update-secret --secret-id ${dbCredentials.secretArn} --secret-string '{"username":"postgres","password":"YOUR_ACTUAL_PASSWORD"}'`,
       description: 'Run this command after deployment',
+    });
+
+    // Test users output
+    new cdk.CfnOutput(this, 'TestUserCredentials', {
+      value: 'Test users created: test1@example.com, test2@example.com, admin@example.com (all with password: TempPass123!)',
+      description: 'Test user accounts created in the user pool',
     });
   }
 } 
