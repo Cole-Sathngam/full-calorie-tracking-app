@@ -1,5 +1,6 @@
 import { defineBackend } from '@aws-amplify/backend';
+import { auth } from './auth/resource';
 
 export const backend = defineBackend({
-  // Removed auth - we'll use CDK User Pool instead
+  auth,
 }); 

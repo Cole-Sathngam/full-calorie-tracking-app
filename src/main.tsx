@@ -10,7 +10,7 @@ import "./index.css";
 
 const amplifyConfig = parseAmplifyConfig(outputs);
 
-// Configure Amplify for authentication only (no API needed since we use CDK API directly)
+// Configure Amplify with auto-generated configuration
 Amplify.configure(amplifyConfig);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
