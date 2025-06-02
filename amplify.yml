@@ -3,7 +3,10 @@ backend:
   phases:
     build:
       commands:
-        - cd calorie-tracking-app && npm install && npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+        - pwd
+        - ls -la
+        - ls -la calorie-tracking-app/
+        - cd calorie-tracking-app && pwd && ls -la && npm install && npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
 frontend:
   phases:
     preBuild:
