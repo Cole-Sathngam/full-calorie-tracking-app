@@ -1,3 +1,6 @@
+/* eslint-env node */
+/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable no-undef */
 const { Client } = require('pg');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 
@@ -61,19 +64,16 @@ async function connectToDb() {
 }
 
 exports.handler = async (event) => {
-  console.log('Event received:', JSON.stringify(event, null, 2));
-  
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,OPTIONS',
     'Content-Type': 'application/json'
   };
 
   try {
     // Handle OPTIONS preflight requests
     if (event.httpMethod === 'OPTIONS') {
-      console.log('Handling OPTIONS preflight request');
       return {
         statusCode: 200,
         headers,
@@ -81,33 +81,9 @@ exports.handler = async (event) => {
       };
     }
 
-    console.log('Processing API request:', event.httpMethod, event.path);
-    
-    // Connect to database
-    const db = await connectToDb();
-    
-    // Handle different HTTP methods and paths
-    const { httpMethod, path } = event;
-    
-    if (httpMethod === 'GET' && path === '/foods') {
-      // Get all foods
-      const result = await db.query('SELECT * FROM food_items ORDER BY name');
-      
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          success: true,
-          data: result.rows,
-          message: 'Foods retrieved successfully from PostgreSQL database',
-          source: 'postgresql',
-          count: result.rows.length
-        })
-      };
-    }
-    
-    if (httpMethod === 'GET' && path.includes('/foods/search')) {
-      // Search foods by name
+    // Only handle search endpoint
+    if (event.httpMethod === 'GET' && event.path.includes('/foods/search')) {
+      const db = await connectToDb();
       const queryParams = event.queryStringParameters || {};
       const searchTerm = queryParams.name || '';
       
@@ -129,48 +105,15 @@ exports.handler = async (event) => {
       };
     }
     
-    if (httpMethod === 'POST' && path === '/foods') {
-      // Create new food
-      const body = JSON.parse(event.body || '{}');
-      const { name, calories } = body;
-      
-      if (!name || !calories) {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({
-            success: false,
-            error: 'Name and calories are required'
-          })
-        };
-      }
-      
-      const result = await db.query(
-        'INSERT INTO food_items (name, calories) VALUES ($1, $2) RETURNING *',
-        [name, calories]
-      );
-      
-      return {
-        statusCode: 201,
-        headers,
-        body: JSON.stringify({
-          success: true,
-          data: result.rows[0],
-          message: 'Food created successfully',
-          source: 'postgresql'
-        })
-      };
-    }
-    
     // Default response for unsupported routes
     return {
       statusCode: 404,
       headers,
       body: JSON.stringify({
         success: false,
-        error: 'Route not found',
-        path: path,
-        method: httpMethod
+        error: 'Only search endpoint is supported',
+        path: event.path,
+        method: event.httpMethod
       })
     };
 

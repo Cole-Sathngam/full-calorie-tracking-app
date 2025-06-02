@@ -3,6 +3,7 @@ import { useEnhancedAuth } from "./hooks/useEnhancedAuth";
 import SessionIndicator from "./components/SessionIndicator";
 import ErrorDisplay from "./components/ErrorDisplay";
 import { apiClient, ApiError, Food } from "./services/apiClient";
+import { useCombobox } from 'downshift'
 
 // Convert ApiError to a compatible error format for display
 interface DisplayError {
@@ -26,21 +27,16 @@ const convertApiErrorToDisplayError = (apiError: ApiError): DisplayError => ({
 });
 
 function App() {
-  const { user, signOut } = useEnhancedAuth(); // Enhanced but still uses Amplify
+  const { user, signOut } = useEnhancedAuth();
   const [apiError, setApiError] = useState<DisplayError | null>(null);
 
-  // New state for calorie lookup feature
-  const [lookupTerm, setLookupTerm] = useState("");
+  // State for calorie lookup feature
   const [lookupResult, setLookupResult] = useState<FoodLookupResult | null>(null);
   const [isLookupLoading, setIsLookupLoading] = useState(false);
 
-  // Autocomplete state
+  // Downshift autocomplete state
   const [suggestions, setSuggestions] = useState<Food[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleApiError = (error: unknown) => {
@@ -60,11 +56,10 @@ function App() {
     setApiError(null);
   };
 
-  // Autocomplete functions
+  // Fetch suggestions with debouncing
   const fetchSuggestions = async (searchTerm: string) => {
     if (searchTerm.length < 2) {
       setSuggestions([]);
-      setShowSuggestions(false);
       return;
     }
 
@@ -72,12 +67,9 @@ function App() {
       setIsLoadingSuggestions(true);
       const results = await apiClient.searchFood(searchTerm);
       setSuggestions(results.slice(0, 10)); // Limit to 10 suggestions
-      setShowSuggestions(true);
-      setSelectedSuggestionIndex(-1);
     } catch (error) {
       console.error('Error fetching suggestions:', error);
       setSuggestions([]);
-      setShowSuggestions(false);
     } finally {
       setIsLoadingSuggestions(false);
     }
@@ -90,62 +82,22 @@ function App() {
 
     debounceRef.current = setTimeout(() => {
       fetchSuggestions(searchTerm);
-    }, 300); // 300ms delay
+    }, 300);
   };
 
-  const handleInputChange = (value: string) => {
-    setLookupTerm(value);
-    setLookupResult(null); // Clear previous result
-    debouncedFetchSuggestions(value);
-  };
-
-  const selectSuggestion = (suggestion: Food) => {
-    setLookupTerm(suggestion.name);
-    setSuggestions([]);
-    setShowSuggestions(false);
-    setSelectedSuggestionIndex(-1);
-    
-    // Automatically trigger lookup for selected suggestion
-    const caloriesPer100g = suggestion.calories;
-    const caloriesPer50g = Math.round((caloriesPer100g / 100) * 50);
-    
-    setLookupResult({
-      name: suggestion.name,
-      caloriesPer100g,
-      caloriesPer50g,
-      found: true
-    });
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!showSuggestions || suggestions.length === 0) return;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => 
-          prev < suggestions.length - 1 ? prev + 1 : 0
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => 
-          prev > 0 ? prev - 1 : suggestions.length - 1
-        );
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (selectedSuggestionIndex >= 0) {
-          selectSuggestion(suggestions[selectedSuggestionIndex]);
-        } else {
-          handleCalorieLookup();
-        }
-        break;
-      case 'Escape':
-        setSuggestions([]);
-        setShowSuggestions(false);
-        setSelectedSuggestionIndex(-1);
-        break;
+  // Handle selection from dropdown
+  const handleSelection = (selectedItem: Food | null) => {
+    if (selectedItem) {
+      // Automatically trigger lookup for selected suggestion
+      const caloriesPer100g = selectedItem.calories;
+      const caloriesPer50g = Math.round((caloriesPer100g / 100) * 50);
+      
+      setLookupResult({
+        name: selectedItem.name,
+        caloriesPer100g,
+        caloriesPer50g,
+        found: true
+      });
     }
   };
 
@@ -158,30 +110,9 @@ function App() {
     };
   }, []);
 
-  // Handle click outside to close suggestions
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      const isInsideInput = inputRef.current && inputRef.current.contains(target);
-      const isInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target);
-      
-      if (!isInsideInput && !isInsideDropdown) {
-        setShowSuggestions(false);
-        setSelectedSuggestionIndex(-1);
-      }
-    };
-
-    if (showSuggestions) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [showSuggestions]);
-
-  // New function for calorie lookup
-  const handleCalorieLookup = async () => {
-    if (!lookupTerm.trim()) {
+  // Manual calorie lookup function
+  const handleCalorieLookup = async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
       alert("Please enter a food name to lookup calories");
       return;
     }
@@ -190,15 +121,11 @@ function App() {
       setIsLookupLoading(true);
       setApiError(null);
       
-      const results = await apiClient.searchFood(lookupTerm.trim());
+      const results = await apiClient.searchFood(searchTerm.trim());
       console.log('🔍 Lookup Results:', results);
       
       if (results.length > 0) {
-        // Take the first matching result
         const food = results[0] as { name: string; calories: number };
-        
-        // Assume the stored calories are per 100g (standard nutritional info)
-        // Calculate calories per 50g
         const caloriesPer100g = food.calories;
         const caloriesPer50g = Math.round((caloriesPer100g / 100) * 50);
         
@@ -210,7 +137,7 @@ function App() {
         });
       } else {
         setLookupResult({
-          name: lookupTerm.trim(),
+          name: searchTerm.trim(),
           caloriesPer100g: 0,
           caloriesPer50g: 0,
           found: false
@@ -226,19 +153,36 @@ function App() {
 
   const clearLookupResult = () => {
     setLookupResult(null);
-    setLookupTerm("");
+    resetCombobox();
   };
+
+  // Downshift setup
+  const {
+    isOpen,
+    getMenuProps,
+    getInputProps,
+    getItemProps,
+    inputValue,
+    highlightedIndex,
+    reset: resetCombobox
+  } = useCombobox({
+    items: suggestions,
+    onInputValueChange: ({ inputValue }) => {
+      if (inputValue !== undefined) {
+        setLookupResult(null); // Clear previous result
+        debouncedFetchSuggestions(inputValue);
+      }
+    },
+    onSelectedItemChange: ({ selectedItem }) => {
+      handleSelection(selectedItem);
+    },
+    itemToString: (item) => item ? item.name : '',
+  });
 
   return (
     <main style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <header style={{ marginBottom: '30px', textAlign: 'center' }}>
-        <h1 style={{ color: '#2c3e50', marginBottom: '10px' }}>
-          🍎 {user?.signInDetails?.loginId || user?.username}'s Calorie Tracking App
-        </h1>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', alignItems: 'center' }}>
-          <span style={{ color: '#27ae60', fontSize: '14px' }}>
-            ✅ Authenticated as {user?.username}
-          </span>
           <button
             onClick={signOut}
             style={{
@@ -256,10 +200,8 @@ function App() {
         </div>
       </header>
 
-      {/* Session Management - Shows session status and auth errors */}
       <SessionIndicator showDetails />
 
-      {/* API Error Display */}
       {apiError && (
         <div style={{ marginBottom: '20px' }}>
           <ErrorDisplay
@@ -270,7 +212,7 @@ function App() {
         </div>
       )}
 
-      {/* NEW: Calorie Lookup Section */}
+      {/* Calorie Lookup Section with Downshift */}
       <section style={{ 
         padding: '25px', 
         backgroundColor: '#e8f5e8', 
@@ -291,87 +233,81 @@ function App() {
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
             <div style={{ flex: 1, position: 'relative' }}>
               <input 
-                ref={inputRef}
-                type="text" 
-                value={lookupTerm}
-                onChange={(e) => handleInputChange(e.target.value)}
-                placeholder="Enter food name (e.g., Apple, Chicken Breast)..."
-                disabled={isLookupLoading}
-                style={{ 
-                  width: '100%',
-                  padding: '12px', 
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
-                  fontSize: '16px'
-                }}
-                onKeyDown={handleKeyDown}
+                {...getInputProps({
+                  placeholder: "Enter food name (e.g., Apple, Chicken Breast)...",
+                  disabled: isLookupLoading,
+                  style: { 
+                    width: '100%',
+                    padding: '12px', 
+                    border: '1px solid #ced4da',
+                    borderRadius: '4px',
+                    fontSize: '16px'
+                  }
+                })}
               />
               
-              {/* Autocomplete Dropdown */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div 
-                  ref={dropdownRef}
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #ced4da',
-                    borderTop: 'none',
-                    borderRadius: '0 0 4px 4px',
-                    maxHeight: '200px',
-                    overflowY: 'auto',
-                    zIndex: 1000,
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                  }}
-                >
-                  {suggestions.map((suggestion, index) => (
-                    <div
-                      key={suggestion.id}
-                      onClick={() => selectSuggestion(suggestion)}
-                      style={{
-                        padding: '12px',
-                        cursor: 'pointer',
-                        backgroundColor: selectedSuggestionIndex === index ? '#e9ecef' : 'white',
-                        borderBottom: index < suggestions.length - 1 ? '1px solid #e9ecef' : 'none',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                      onMouseEnter={() => setSelectedSuggestionIndex(index)}
-                    >
-                      <span style={{ fontWeight: '500' }}>{suggestion.name}</span>
-                      <span style={{ fontSize: '14px', color: '#6c757d' }}>
-                        {suggestion.calories} cal/100g
-                      </span>
-                    </div>
-                  ))}
-                  
-                  {isLoadingSuggestions && (
-                    <div style={{
+              {/* Downshift Autocomplete Dropdown */}
+              <div 
+                {...getMenuProps()}
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'white',
+                  border: isOpen && suggestions.length > 0 ? '1px solid #ced4da' : 'none',
+                  borderTop: 'none',
+                  borderRadius: '0 0 4px 4px',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  zIndex: 1000,
+                  boxShadow: isOpen && suggestions.length > 0 ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                }}
+              >
+                {isOpen && suggestions.map((suggestion, index) => (
+                  <div
+                    key={suggestion.id}
+                    {...getItemProps({ item: suggestion, index })}
+                    style={{
                       padding: '12px',
-                      textAlign: 'center',
-                      color: '#6c757d',
-                      fontSize: '14px'
-                    }}>
-                      🔍 Searching...
-                    </div>
-                  )}
-                </div>
-              )}
+                      cursor: 'pointer',
+                      backgroundColor: highlightedIndex === index ? '#e9ecef' : 'white',
+                      borderBottom: index < suggestions.length - 1 ? '1px solid #e9ecef' : 'none',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <span style={{ fontWeight: '500' }}>{suggestion.name}</span>
+                    <span style={{ fontSize: '14px', color: '#6c757d' }}>
+                      {suggestion.calories} cal/100g
+                    </span>
+                  </div>
+                ))}
+                
+                {isOpen && isLoadingSuggestions && (
+                  <div style={{
+                    padding: '12px',
+                    textAlign: 'center',
+                    color: '#6c757d',
+                    fontSize: '14px'
+                  }}>
+                    🔍 Searching...
+                  </div>
+                )}
+              </div>
             </div>
             
             <button 
-              onClick={handleCalorieLookup}
-              disabled={isLookupLoading || !lookupTerm.trim()}
+              onClick={() => handleCalorieLookup(inputValue)}
+              disabled={isLookupLoading || !inputValue.trim()}
               style={{ 
                 padding: '12px 20px', 
-                backgroundColor: isLookupLoading || !lookupTerm.trim() ? '#95a5a6' : '#28a745', 
+                backgroundColor: isLookupLoading || !inputValue.trim() ? '#95a5a6' : '#28a745', 
                 color: 'white', 
                 border: 'none', 
                 borderRadius: '4px',
-                cursor: isLookupLoading || !lookupTerm.trim() ? 'not-allowed' : 'pointer',
+                cursor: isLookupLoading || !inputValue.trim() ? 'not-allowed' : 'pointer',
                 fontSize: '16px',
                 fontWeight: 'bold'
               }}

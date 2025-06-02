@@ -1,5 +1,10 @@
 import React from 'react';
-import { AuthError } from '../contexts/AuthContext';
+
+interface AuthError {
+  code: string;
+  name: string;
+  message: string;
+}
 
 interface ErrorDisplayProps {
   error: AuthError;

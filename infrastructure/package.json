@@ -2,7 +2,7 @@
   "name": "calorie-api-infrastructure",
   "version": "1.0.0",
   "description": "AWS CDK Infrastructure for Calorie Tracking API",
-  "main": "lib/calorie-api-infrastructure-stack.js",
+  "main": "lib/calorie-api-infrastructure-stack-v2.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
