@@ -24,5 +24,14 @@
     },
     "unauthenticated_identities_enabled": true
   },
-  "version": "1.2"
+  "version": "1.2",
+  "custom": {
+    "API": {
+      "food-rest-api": {
+        "endpoint": "https://mihh31xr4e.execute-api.us-east-2.amazonaws.com/prod/",
+        "region": "us-east-2",
+        "apiName": "food-rest-api"
+      }
+    }
+  }
 }
