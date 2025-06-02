@@ -10,13 +10,8 @@ import "./index.css";
 
 const amplifyConfig = parseAmplifyConfig(outputs);
 
-Amplify.configure({
-  ...amplifyConfig,
-  API: {
-    ...amplifyConfig.API,
-    REST: outputs.custom?.API || {},
-  },
-});
+// Configure Amplify for authentication only (no API needed since we use CDK API directly)
+Amplify.configure(amplifyConfig);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
