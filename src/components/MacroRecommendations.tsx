@@ -93,8 +93,8 @@ const MacroRecommendations: React.FC<MacroRecommendationsProps> = ({ weight, wei
           </h4>
           <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
             <div><strong>Sedentary:</strong> {macroData.carbs.sedentary}g</div>
-            <div><strong>Moderately Active:</strong> {macroData.carbs.moderate}g</div>
-            <div><strong>Very Active/Endurance:</strong> {macroData.carbs.veryActive}g</div>
+            <div><strong>Active:</strong> {macroData.carbs.moderate}g</div>
+            <div><strong>Athlete/Endurance:</strong> {macroData.carbs.veryActive}g</div>
           </div>
         </div>
 

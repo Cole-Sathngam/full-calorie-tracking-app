@@ -1,0 +1,27 @@
+{
+  "deployedInfrastructure": {
+    "stackName": "CalorieApiInfrastructureStackV2",
+    "region": "us-east-2",
+    "outputs": {
+      "UserPoolId": "us-east-2_zzEaQrL3T",
+      "UserPoolClientId": "1iuo3spailh216c0rkmt7vuubn",
+      "ApiGatewayUrl": "https://mihh31xr4e.execute-api.us-east-2.amazonaws.com/prod/",
+      "DatabaseEndpoint": "calorie-db-1.czyq4e4syyy0.us-east-2.rds.amazonaws.com",
+      "DatabaseSecretArn": "arn:aws:secretsmanager:us-east-2:850960379692:secret:ExistingDbCredentials48D0D2-X6MbPDEu44v4-QR1b9Y"
+    },
+    "testUsers": {
+      "users": ["test1@example.com", "test2@example.com", "admin@example.com"],
+      "password": "TempPass123!"
+    }
+  },
+  "frontendConfig": {
+    "amplify_outputs": {
+      "auth": {
+        "user_pool_id": "us-east-2_3oS8LPhKu",
+        "user_pool_client_id": "7c308e97tea9g61d1nvqod9ucb",
+        "identity_pool_id": "us-east-2:14e98fa9-5cf1-4994-bfd0-31b921b63ef8",
+        "aws_region": "us-east-2"
+      }
+    }
+  }
+}
