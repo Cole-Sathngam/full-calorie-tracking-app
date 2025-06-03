@@ -13,7 +13,6 @@ body {
 /* Amplify Authenticator styling - add top spacing */
 [data-amplify-authenticator] {
   padding-top: 60px !important;
-  min-height: 100vh;
   background: linear-gradient(180deg, rgb(117, 81, 194), rgb(255, 255, 255));
   position: relative;
 }

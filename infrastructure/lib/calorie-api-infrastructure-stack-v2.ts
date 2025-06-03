@@ -10,11 +10,30 @@ export class CalorieApiInfrastructureStackV2 extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Existing RDS instance details
-    const rdsEndpoint = 'calorie-db-1.czyq4e4syyy0.us-east-2.rds.amazonaws.com';
-    const rdsPort = 5432;
-    const dbName = 'postgres';
-    const dbUsername = 'postgres';
+    // RDS instance details from environment variables with validation
+    const rdsEndpoint = process.env.RDS_ENDPOINT;
+    const rdsPortStr = process.env.RDS_PORT;
+    const dbName = process.env.DB_NAME;
+    const dbUsername = process.env.DB_USERNAME;
+
+    // Validate required environment variables
+    if (!rdsEndpoint) {
+      throw new Error('RDS_ENDPOINT environment variable is required');
+    }
+    if (!rdsPortStr) {
+      throw new Error('RDS_PORT environment variable is required');
+    }
+    if (!dbName) {
+      throw new Error('DB_NAME environment variable is required');
+    }
+    if (!dbUsername) {
+      throw new Error('DB_USERNAME environment variable is required');
+    }
+
+    const rdsPort = parseInt(rdsPortStr, 10);
+    if (isNaN(rdsPort)) {
+      throw new Error('RDS_PORT must be a valid number');
+    }
 
     // Database credentials secret
     const dbCredentials = new secretsmanager.Secret(this, 'ExistingDbCredentials', {
@@ -26,43 +45,19 @@ export class CalorieApiInfrastructureStackV2 extends cdk.Stack {
       },
     });
 
-    // Cognito User Pool for Authentication
-    const userPool = new cognito.UserPool(this, 'CalorieAppUserPool', {
-      userPoolName: 'calorie-app-users',
-      selfSignUpEnabled: true,
-      signInAliases: {
-        email: true,
-      },
-      autoVerify: {
-        email: true,
-      },
-      standardAttributes: {
-        email: {
-          required: true,
-          mutable: true,
-        },
-      },
-      passwordPolicy: {
-        minLength: 8,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireDigits: true,
-        requireSymbols: false,
-      },
-      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    // Reference existing Cognito User Pool (managed by Amplify)
+    const existingUserPoolId = process.env.USER_POOL_ID;
+    const existingUserPoolClientId = process.env.USER_POOL_CLIENT_ID;
 
-    // Cognito User Pool Client
-    const userPoolClient = new cognito.UserPoolClient(this, 'CalorieAppUserPoolClient', {
-      userPool,
-      userPoolClientName: 'calorie-app-client',
-      authFlows: {
-        userSrp: true,
-        userPassword: true,
-      },
-      generateSecret: false,
-    });
+    if (!existingUserPoolId) {
+      throw new Error('USER_POOL_ID environment variable is required');
+    }
+    if (!existingUserPoolClientId) {
+      throw new Error('USER_POOL_CLIENT_ID environment variable is required');
+    }
+
+    // Import existing User Pool instead of creating new one
+    const userPool = cognito.UserPool.fromUserPoolId(this, 'ImportedUserPool', existingUserPoolId);
 
     // Lambda function for API (outside VPC for simplicity since RDS is publicly accessible)
     const apiFunction = new lambda.Function(this, 'CalorieApiFunction', {
@@ -129,7 +124,7 @@ export class CalorieApiInfrastructureStackV2 extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'UserPoolClientId', {
-      value: userPoolClient.userPoolClientId,
+      value: existingUserPoolClientId,
       description: 'Cognito User Pool Client ID',
     });
 
