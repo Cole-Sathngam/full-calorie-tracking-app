@@ -10,13 +10,43 @@ body {
   min-height: 100vh;
 }
 
-/* When showing the authenticator, center it */
+/* Amplify Authenticator styling - add top spacing */
+[data-amplify-authenticator] {
+  padding-top: 60px !important;
+  min-height: 100vh;
+  background: linear-gradient(180deg, rgb(117, 81, 194), rgb(255, 255, 255));
+  position: relative;
+}
+
+/* Add "Calorie Tracking App" title above authentication */
+[data-amplify-authenticator]::before {
+  content: "Calorie Tracking App";
+  display: block;
+  text-align: center;
+  font-size: 32px;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 30px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  padding: 0 20px;
+}
+
+/* Style the authentication form container */
+[data-amplify-authenticator] > div {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* When showing the authenticator, center it with top spacing */
 .auth-container {
   background: linear-gradient(180deg, rgb(117, 81, 194), rgb(255, 255, 255));
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   min-height: 100vh;
+  padding-top: 80px;
+  box-sizing: border-box;
 }
 
 /* When authenticated, normal layout */

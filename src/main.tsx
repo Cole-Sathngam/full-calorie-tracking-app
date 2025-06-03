@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { Authenticator } from '@aws-amplify/ui-react';
+import { ChakraProvider, defaultSystem } from "@chakra-ui/react";
 import App from "./App.tsx";
 import { Amplify } from "aws-amplify";
 import { parseAmplifyConfig } from "aws-amplify/utils";
@@ -15,8 +16,10 @@ Amplify.configure(amplifyConfig);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <Authenticator>
-      <App />
-    </Authenticator>
+    <ChakraProvider value={defaultSystem}>
+      <Authenticator>
+        <App />
+      </Authenticator>
+    </ChakraProvider>
   </React.StrictMode>
 );

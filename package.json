@@ -11,8 +11,12 @@
   },
   "dependencies": {
     "@aws-amplify/ui-react": "^6.5.5",
+    "@chakra-ui/react": "^3.19.2",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
     "aws-amplify": "^6.15.0",
     "downshift": "^9.0.9",
+    "framer-motion": "^12.15.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

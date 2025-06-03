@@ -50,6 +50,9 @@ async function connectToDb() {
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         calories INTEGER NOT NULL,
+        protein DECIMAL(5,2) DEFAULT 0,
+        carbs DECIMAL(5,2) DEFAULT 0,
+        fat DECIMAL(5,2) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);

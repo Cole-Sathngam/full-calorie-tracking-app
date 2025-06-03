@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useEnhancedAuth } from "./hooks/useEnhancedAuth";
-import SessionIndicator from "./components/SessionIndicator";
 import ErrorDisplay from "./components/ErrorDisplay";
+import FoodSearchCombobox from "./components/FoodSearchCombobox";
+import FoodLog, { FoodLogRef } from "./components/FoodLog";
+import MacroRecommendations from "./components/MacroRecommendations";
 import { apiClient, ApiError, Food } from "./services/apiClient";
-import { useCombobox } from 'downshift'
 
-// Convert ApiError to a compatible error format for display
 interface DisplayError {
   code: string;
   message: string;
@@ -16,7 +16,14 @@ interface DisplayError {
 interface FoodLookupResult {
   name: string;
   caloriesPer100g: number;
-  caloriesPer50g: number;
+  caloriesPerPortion: number;
+  proteinPer100g: number;
+  proteinPerPortion: number;
+  carbsPer100g: number;
+  carbsPerPortion: number;
+  fatPer100g: number;
+  fatPerPortion: number;
+  portionSize: number;
   found: boolean;
 }
 
@@ -30,14 +37,18 @@ function App() {
   const { user, signOut } = useEnhancedAuth();
   const [apiError, setApiError] = useState<DisplayError | null>(null);
 
+  // State for weight tracking
+  const [currentWeight, setCurrentWeight] = useState<number | string>('');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('lbs');
+
   // State for calorie lookup feature
   const [lookupResult, setLookupResult] = useState<FoodLookupResult | null>(null);
   const [isLookupLoading, setIsLookupLoading] = useState(false);
+  const [currentInputValue, setCurrentInputValue] = useState("");
+  const [gramInput, setGramInput] = useState<string>("100");
 
-  // Downshift autocomplete state
-  const [suggestions, setSuggestions] = useState<Food[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref to access FoodLog component methods
+  const foodLogRef = useRef<FoodLogRef>(null);
 
   const handleApiError = (error: unknown) => {
     if (error && typeof error === 'object' && 'code' in error) {
@@ -56,59 +67,77 @@ function App() {
     setApiError(null);
   };
 
-  // Fetch suggestions with debouncing
-  const fetchSuggestions = async (searchTerm: string) => {
-    if (searchTerm.length < 2) {
-      setSuggestions([]);
-      return;
-    }
-
-    try {
-      setIsLoadingSuggestions(true);
-      const results = await apiClient.searchFood(searchTerm);
-      setSuggestions(results.slice(0, 10)); // Limit to 10 suggestions
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
-      setSuggestions([]);
-    } finally {
-      setIsLoadingSuggestions(false);
+  // Handle weight input changes
+  const handleWeightChange = (value: string) => {
+    // Allow empty string or valid numbers (including decimals)
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setCurrentWeight(value);
     }
   };
 
-  const debouncedFetchSuggestions = (searchTerm: string) => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
+  // Convert weight between units for display
+  const getConvertedWeight = () => {
+    const weight = typeof currentWeight === 'string' ? parseFloat(currentWeight) : currentWeight;
+    if (isNaN(weight) || weight <= 0) return null;
+    
+    if (weightUnit === 'kg') {
+      return {
+        primary: `${weight} kg`,
+        secondary: `${(weight * 2.20462).toFixed(1)} lbs`
+      };
+    } else {
+      return {
+        primary: `${weight} lbs`,
+        secondary: `${(weight / 2.20462).toFixed(1)} kg`
+      };
     }
-
-    debounceRef.current = setTimeout(() => {
-      fetchSuggestions(searchTerm);
-    }, 300);
   };
 
-  // Handle selection from dropdown
-  const handleSelection = (selectedItem: Food | null) => {
-    if (selectedItem) {
-      // Automatically trigger lookup for selected suggestion
-      const caloriesPer100g = selectedItem.calories;
-      const caloriesPer50g = Math.round((caloriesPer100g / 100) * 50);
+  // Handle selection from combobox
+  const handleFoodSelection = (selectedFood: Food | null) => {
+    if (selectedFood) {
+      // Calculate nutrition based on exact gram input
+      const gramValue = Number(gramInput) || 0;
+      const caloriesPer100g = selectedFood.calories;
+      const caloriesPerPortion = Math.round((caloriesPer100g / 100) * gramValue);
       
       setLookupResult({
-        name: selectedItem.name,
+        name: selectedFood.name,
         caloriesPer100g,
-        caloriesPer50g,
+        caloriesPerPortion,
+        proteinPer100g: selectedFood.protein,
+        proteinPerPortion: Math.round(((selectedFood.protein / 100) * gramValue) * 10) / 10,
+        carbsPer100g: selectedFood.carbs,
+        carbsPerPortion: Math.round(((selectedFood.carbs / 100) * gramValue) * 10) / 10,
+        fatPer100g: selectedFood.fat,
+        fatPerPortion: Math.round(((selectedFood.fat / 100) * gramValue) * 10) / 10,
+        portionSize: gramValue,
         found: true
       });
+
+      // Note: No longer automatically adding to food log here
     }
   };
 
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, []);
+  // Handle adding food to log (separate from selection)
+  const handleAddToLog = () => {
+    if (lookupResult && lookupResult.found) {
+      foodLogRef.current?.addFood(
+        lookupResult.name, 
+        lookupResult.caloriesPer100g, 
+        lookupResult.proteinPer100g, 
+        lookupResult.carbsPer100g, 
+        lookupResult.fatPer100g, 
+        lookupResult.portionSize
+      );
+    }
+  };
+
+  // Handle input changes from combobox
+  const handleInputChange = (value: string) => {
+    setCurrentInputValue(value);
+    setLookupResult(null); // Clear previous result
+  };
 
   // Manual calorie lookup function
   const handleCalorieLookup = async (searchTerm: string) => {
@@ -125,21 +154,39 @@ function App() {
       console.log('🔍 Lookup Results:', results);
       
       if (results.length > 0) {
-        const food = results[0] as { name: string; calories: number };
+        const food = results[0] as Food;
+        const gramValue = Number(gramInput) || 0;
         const caloriesPer100g = food.calories;
-        const caloriesPer50g = Math.round((caloriesPer100g / 100) * 50);
+        const caloriesPerPortion = Math.round((caloriesPer100g / 100) * gramValue);
         
         setLookupResult({
           name: food.name,
           caloriesPer100g,
-          caloriesPer50g,
+          caloriesPerPortion,
+          proteinPer100g: food.protein,
+          proteinPerPortion: Math.round(((food.protein / 100) * gramValue) * 10) / 10,
+          carbsPer100g: food.carbs,
+          carbsPerPortion: Math.round(((food.carbs / 100) * gramValue) * 10) / 10,
+          fatPer100g: food.fat,
+          fatPerPortion: Math.round(((food.fat / 100) * gramValue) * 10) / 10,
+          portionSize: gramValue,
           found: true
         });
+
+        // Note: No longer automatically adding to food log here
       } else {
+        const gramValue = Number(gramInput) || 0;
         setLookupResult({
           name: searchTerm.trim(),
           caloriesPer100g: 0,
-          caloriesPer50g: 0,
+          caloriesPerPortion: 0,
+          proteinPer100g: 0,
+          proteinPerPortion: 0,
+          carbsPer100g: 0,
+          carbsPerPortion: 0,
+          fatPer100g: 0,
+          fatPerPortion: 0,
+          portionSize: gramValue,
           found: false
         });
       }
@@ -153,60 +200,64 @@ function App() {
 
   const clearLookupResult = () => {
     setLookupResult(null);
-    resetCombobox();
+    setCurrentInputValue("");
   };
-
-  // Downshift setup
-  const {
-    isOpen,
-    getMenuProps,
-    getInputProps,
-    getItemProps,
-    inputValue,
-    highlightedIndex,
-    reset: resetCombobox
-  } = useCombobox({
-    items: suggestions,
-    onInputValueChange: ({ inputValue }) => {
-      if (inputValue !== undefined) {
-        setLookupResult(null); // Clear previous result
-        debouncedFetchSuggestions(inputValue);
-      }
-    },
-    onSelectedItemChange: ({ selectedItem }) => {
-      handleSelection(selectedItem);
-    },
-    itemToString: (item) => item ? item.name : '',
-  });
 
   return (
     <main style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <header style={{ marginBottom: '30px', textAlign: 'center' }}>
-        <h1 style={{ color: '#2c3e50', marginBottom: '10px' }}>
-          🍎 {user?.signInDetails?.loginId || user?.username}'s Calorie Tracking App
-        </h1>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', alignItems: 'center' }}>
-          <span style={{ color: '#27ae60', fontSize: '14px' }}>
-            ✅ Authenticated as {user?.username}
-          </span>
+      {/* Top Dashboard */}
+      <div style={{
+        backgroundColor: '#f8f9fa',
+        border: '1px solid #dee2e6',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '30px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <div>
+          <h2 style={{ margin: 0, color: '#495057', fontSize: '24px' }}>
+            Dashboard
+          </h2>
+          <p style={{ margin: '5px 0 0 0', color: '#6c757d', fontSize: '14px' }}>
+            Welcome back, {user?.signInDetails?.loginId || user?.username}
+          </p>
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{
+            backgroundColor: '#e8f5e8',
+            padding: '8px 12px',
+            borderRadius: '20px',
+            fontSize: '12px',
+            color: '#155724',
+            fontWeight: '500'
+          }}>
+            🟢 Online
+          </div>
+          
           <button
             onClick={signOut}
             style={{
-              backgroundColor: '#e74c3c',
+              backgroundColor: '#dc3545',
               color: 'white',
               border: 'none',
-              padding: '8px 15px',
-              borderRadius: '4px',
+              padding: '10px 16px',
+              borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '14px'
+              fontSize: '14px',
+              fontWeight: '500',
+              transition: 'background-color 0.2s'
             }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#c82333'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#dc3545'}
           >
-            👋 Sign Out
+            Sign Out
           </button>
         </div>
-      </header>
-
-      <SessionIndicator showDetails />
+      </div>
 
       {apiError && (
         <div style={{ marginBottom: '20px' }}>
@@ -218,7 +269,107 @@ function App() {
         </div>
       )}
 
-      {/* Calorie Lookup Section with Downshift */}
+      {/* Weight Input Section */}
+      <section style={{ 
+        padding: '25px', 
+        backgroundColor: '#e3f2fd', 
+        borderRadius: '10px',
+        border: '1px solid #90caf9',
+        marginBottom: '30px'
+      }}>
+        <h2 style={{ color: '#1565c0', marginBottom: '20px' }}>
+          ⚖️ Current Weight
+        </h2>
+        
+        <div style={{ 
+          padding: '20px', 
+          backgroundColor: 'white', 
+          borderRadius: '6px',
+          border: '1px solid #90caf9'
+        }}>
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '15px' }}>
+            <div style={{ flex: 1 }}>
+              <input
+                type="text"
+                value={currentWeight}
+                onChange={(e) => handleWeightChange(e.target.value)}
+                placeholder="Enter your weight..."
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: '16px',
+                  border: '2px solid #e3f2fd',
+                  borderRadius: '6px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#1976d2'}
+                onBlur={(e) => e.target.style.borderColor = '#e3f2fd'}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setWeightUnit('lbs')}
+                style={{
+                  padding: '12px 20px',
+                  backgroundColor: weightUnit === 'lbs' ? '#1976d2' : '#f5f5f5',
+                  color: weightUnit === 'lbs' ? 'white' : '#666',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                lbs
+              </button>
+              <button
+                onClick={() => setWeightUnit('kg')}
+                style={{
+                  padding: '12px 20px',
+                  backgroundColor: weightUnit === 'kg' ? '#1976d2' : '#f5f5f5',
+                  color: weightUnit === 'kg' ? 'white' : '#666',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                kg
+              </button>
+            </div>
+          </div>
+
+          {/* Weight Display */}
+          {getConvertedWeight() && (
+            <div style={{
+              padding: '15px',
+              backgroundColor: '#e8f5e8',
+              border: '1px solid #c3e6cb',
+              borderRadius: '6px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#155724', marginBottom: '5px' }}>
+                {getConvertedWeight()?.primary}
+              </div>
+              <div style={{ fontSize: '14px', color: '#6c757d' }}>
+                ({getConvertedWeight()?.secondary})
+              </div>
+            </div>
+          )}
+
+          {/* Macro Recommendations */}
+          <MacroRecommendations weight={typeof currentWeight === 'string' ? parseFloat(currentWeight) : currentWeight} weightUnit={weightUnit} />
+          
+          <div style={{ marginTop: '15px', fontSize: '14px', color: '#6c757d' }}>
+            <strong>💡 Tip:</strong> Tracking your weight helps with accurate calorie and nutrition planning
+          </div>
+        </div>
+      </section>
+
+      {/* Calorie Lookup Section with FoodSearchCombobox */}
       <section style={{ 
         padding: '25px', 
         backgroundColor: '#e8f5e8', 
@@ -227,7 +378,7 @@ function App() {
         marginBottom: '30px'
       }}>
         <h2 style={{ color: '#155724', marginBottom: '20px' }}>
-          🔍 Calorie Lookup - Per 50 Grams
+          🔍 Food Lookup - Custom Portion Size
         </h2>
         
         <div style={{ 
@@ -236,89 +387,68 @@ function App() {
           borderRadius: '6px',
           border: '1px solid #c3e6cb'
         }}>
+          {/* Input Row */}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <input 
-                {...getInputProps({
-                  placeholder: "Enter food name (e.g., Apple, Chicken Breast)...",
-                  disabled: isLookupLoading,
-                  style: { 
-                    width: '100%',
-                    padding: '12px', 
-                    border: '1px solid #ced4da',
-                    borderRadius: '4px',
-                    fontSize: '16px'
-                  }
-                })}
+            <div style={{ flex: 1 }}>
+              <FoodSearchCombobox
+                placeholder="Enter food name (e.g., Apple, Chicken Breast)..."
+                onSelection={handleFoodSelection}
+                onInputChange={handleInputChange}
+                disabled={isLookupLoading}
               />
-              
-              {/* Downshift Autocomplete Dropdown */}
-              <div 
-                {...getMenuProps()}
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  backgroundColor: 'white',
-                  border: isOpen && suggestions.length > 0 ? '1px solid #ced4da' : 'none',
-                  borderTop: 'none',
-                  borderRadius: '0 0 4px 4px',
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                  zIndex: 1000,
-                  boxShadow: isOpen && suggestions.length > 0 ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="number"
+                value={gramInput}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Prevent leading zeros (except for just "0" temporarily)
+                  if (value.length > 1 && value.startsWith('0') && value[1] !== '.') {
+                    return; // Don't allow leading zeros like "01", "02", etc.
+                  }
+                  setGramInput(value);
                 }}
-              >
-                {isOpen && suggestions.map((suggestion, index) => (
-                  <div
-                    key={suggestion.id}
-                    {...getItemProps({ item: suggestion, index })}
-                    style={{
-                      padding: '12px',
-                      cursor: 'pointer',
-                      backgroundColor: highlightedIndex === index ? '#e9ecef' : 'white',
-                      borderBottom: index < suggestions.length - 1 ? '1px solid #e9ecef' : 'none',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <span style={{ fontWeight: '500' }}>{suggestion.name}</span>
-                    <span style={{ fontSize: '14px', color: '#6c757d' }}>
-                      {suggestion.calories} cal/100g
-                    </span>
-                  </div>
-                ))}
-                
-                {isOpen && isLoadingSuggestions && (
-                  <div style={{
-                    padding: '12px',
-                    textAlign: 'center',
-                    color: '#6c757d',
-                    fontSize: '14px'
-                  }}>
-                    🔍 Searching...
-                  </div>
-                )}
-              </div>
+                onBlur={(e) => {
+                  const num = Number(e.target.value);
+                  if (isNaN(num) || num < 1) {
+                    setGramInput("1");
+                  } else if (num > 2000) {
+                    setGramInput("2000");
+                  }
+                }}
+                min="1"
+                max="2000"
+                style={{
+                  width: '80px',
+                  padding: '12px',
+                  fontSize: '16px',
+                  border: '2px solid #e3f2fd',
+                  borderRadius: '6px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+              />
+              <span style={{ fontSize: '14px', color: '#6c757d', whiteSpace: 'nowrap' }}>grams</span>
             </div>
             
             <button 
-              onClick={() => handleCalorieLookup(inputValue)}
-              disabled={isLookupLoading || !inputValue.trim()}
+              onClick={() => handleCalorieLookup(currentInputValue)}
+              disabled={isLookupLoading || !currentInputValue.trim()}
               style={{ 
                 padding: '12px 20px', 
-                backgroundColor: isLookupLoading || !inputValue.trim() ? '#95a5a6' : '#28a745', 
+                backgroundColor: isLookupLoading || !currentInputValue.trim() ? '#95a5a6' : '#28a745', 
                 color: 'white', 
                 border: 'none', 
                 borderRadius: '4px',
-                cursor: isLookupLoading || !inputValue.trim() ? 'not-allowed' : 'pointer',
+                cursor: isLookupLoading || !currentInputValue.trim() ? 'not-allowed' : 'pointer',
                 fontSize: '16px',
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap'
               }}
             >
-              {isLookupLoading ? '⏳ Looking up...' : '🔍 Lookup Calories'}
+              {isLookupLoading ? '⏳ Looking up...' : '🔍 Lookup'}
             </button>
           </div>
 
@@ -369,8 +499,13 @@ function App() {
                       <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '5px' }}>
                         Per 100 grams:
                       </div>
-                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#155724' }}>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#155724', marginBottom: '8px' }}>
                         {lookupResult.caloriesPer100g} cal
+                      </div>
+                      <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <div style={{ color: '#d63384' }}>Protein: {lookupResult.proteinPer100g}g</div>
+                        <div style={{ color: '#fd7e14' }}>Carbs: {lookupResult.carbsPer100g}g</div>
+                        <div style={{ color: '#198754' }}>Fat: {lookupResult.fatPer100g}g</div>
                       </div>
                     </div>
                     
@@ -381,16 +516,44 @@ function App() {
                       border: '2px solid #ffeaa7'
                     }}>
                       <div style={{ fontSize: '14px', color: '#856404', marginBottom: '5px' }}>
-                        Per 50 grams:
+                        Per {lookupResult.portionSize} grams:
                       </div>
-                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#856404' }}>
-                        {lookupResult.caloriesPer50g} cal
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#856404', marginBottom: '8px' }}>
+                        {lookupResult.caloriesPerPortion} cal
+                      </div>
+                      <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <div style={{ color: '#d63384' }}>Protein: {lookupResult.proteinPerPortion}g</div>
+                        <div style={{ color: '#fd7e14' }}>Carbs: {lookupResult.carbsPerPortion}g</div>
+                        <div style={{ color: '#198754' }}>Fat: {lookupResult.fatPerPortion}g</div>
                       </div>
                     </div>
                   </div>
                   
                   <div style={{ marginTop: '10px', fontSize: '12px', color: '#6c757d' }}>
-                    💡 Tip: 50 grams is approximately the size of a small to medium portion
+                    💡 Tip: Adjust the gram amount above to match your actual portion size for precise nutrition tracking
+                  </div>
+                  
+                  {/* Add to Log Button */}
+                  <div style={{ marginTop: '15px', textAlign: 'center' }}>
+                    <button
+                      onClick={handleAddToLog}
+                      style={{
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        padding: '12px 24px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        boxShadow: '0 2px 4px rgba(0,123,255,0.3)',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#0056b3'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#007bff'}
+                    >
+                      📝 Add to Food Log
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -414,9 +577,12 @@ function App() {
         </div>
 
         <div style={{ marginTop: '15px', fontSize: '14px', color: '#6c757d' }}>
-          <strong>📝 Note:</strong> Calorie values are calculated assuming the stored data represents calories per 100g (standard nutritional format)
+          <strong>📝 Note:</strong> Enter any portion size in grams. All nutritional values are automatically calculated based on your custom portion size.
         </div>
       </section>
+
+      {/* Food Log Component */}
+      <FoodLog ref={foodLogRef} />
     </main>
   );
 }
