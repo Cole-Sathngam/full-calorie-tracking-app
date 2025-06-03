@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -44,20 +43,6 @@ export class CalorieApiInfrastructureStackV2 extends cdk.Stack {
         excludeCharacters: '"@/\\',
       },
     });
-
-    // Reference existing Cognito User Pool (managed by Amplify)
-    const existingUserPoolId = process.env.USER_POOL_ID;
-    const existingUserPoolClientId = process.env.USER_POOL_CLIENT_ID;
-
-    if (!existingUserPoolId) {
-      throw new Error('USER_POOL_ID environment variable is required');
-    }
-    if (!existingUserPoolClientId) {
-      throw new Error('USER_POOL_CLIENT_ID environment variable is required');
-    }
-
-    // Import existing User Pool instead of creating new one
-    const userPool = cognito.UserPool.fromUserPoolId(this, 'ImportedUserPool', existingUserPoolId);
 
     // Lambda function for API (outside VPC for simplicity since RDS is publicly accessible)
     const apiFunction = new lambda.Function(this, 'CalorieApiFunction', {
@@ -118,16 +103,6 @@ export class CalorieApiInfrastructureStackV2 extends cdk.Stack {
     proxyResource.addMethod('ANY', lambdaIntegration);
 
     // Outputs
-    new cdk.CfnOutput(this, 'UserPoolId', {
-      value: userPool.userPoolId,
-      description: 'Cognito User Pool ID',
-    });
-
-    new cdk.CfnOutput(this, 'UserPoolClientId', {
-      value: existingUserPoolClientId,
-      description: 'Cognito User Pool Client ID',
-    });
-
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: api.url,
       description: 'API Gateway URL',
@@ -147,12 +122,6 @@ export class CalorieApiInfrastructureStackV2 extends cdk.Stack {
     new cdk.CfnOutput(this, 'PostDeploymentInstructions', {
       value: `Update the secret with your RDS password: aws secretsmanager update-secret --secret-id ${dbCredentials.secretArn} --secret-string '{"username":"postgres","password":"YOUR_ACTUAL_PASSWORD"}'`,
       description: 'Run this command after deployment',
-    });
-
-    // Test users output
-    new cdk.CfnOutput(this, 'TestUserCredentials', {
-      value: 'Test users created: test1@example.com, test2@example.com, admin@example.com (all with password: TempPass123!)',
-      description: 'Test user accounts created in the user pool',
     });
   }
 } 
