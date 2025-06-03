@@ -87,4 +87,7 @@ Thumbs.db
 **/.yarn/unplugged
 **/.yarn/build-state.yml
 **/.yarn/install-state.gz
-**/.pnp.* 
+**/.pnp.*
+
+# amplify_outputs.json
+amplify_outputs.json 
