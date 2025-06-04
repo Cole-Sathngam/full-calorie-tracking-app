@@ -23,8 +23,8 @@ export class ApiClient {
   private readonly retryDelay = 1000; // 1 second
 
   constructor() {
-    // API Configuration - can be overridden with environment variable
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://mihh31xr4e.execute-api.us-east-2.amazonaws.com/prod';
+    // API Configuration - Updated to use the correct CDK API Gateway endpoint
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://iy0tyajsdj.execute-api.us-east-2.amazonaws.com/prod';
   }
 
   static getInstance(): ApiClient {
